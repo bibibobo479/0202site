@@ -57,7 +57,42 @@
             align-items: center;
             gap: 10px;
         }
-               /* Стили остаются теми же, добавляем стили для кнопки применения */
+
+        .product-image {
+            width: 100%;
+            height: 220px; /* Фиксированная высота */
+            margin-bottom: 15px;
+            border-radius: 10px;
+            overflow: hidden;
+            background: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .product-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain; /* Ключевой момент! */
+            transition: transform 0.3s;
+        }
+
+
+        .product-card:hover .product-image img {
+            transform: scale(1.05);
+        }
+
+        /* Стили для заглушки, если нет картинки */
+        .product-image.no-image {
+            background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+            color: #666;
+            font-size: 14px;
+        }
+
+        .product-image.no-image span {
+            opacity: 0.5;
+        }
+
         .apply-filters-btn {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -477,25 +512,57 @@
             }
 
             applyFilters = () => {
+                // Собираем выбранные категории
                 const checkboxes = document.querySelectorAll('.category-filter:checked');
                 const selectedValues = Array.from(checkboxes).map(cb => cb.value);
 
-                this.filters.categories = selectedValues;
+                // Получаем значения цены из input полей
+                const minPrice = document.getElementById('minPrice')?.value;
+                const maxPrice = document.getElementById('maxPrice')?.value;
 
-                console.log('Выбранные значения:', selectedValues);
+                // Получаем статус наличия (если есть radio кнопки)
+                const inStock = document.querySelector('input[name="stock"]:checked')?.value === 'inStock';
+
+                // Сохраняем все фильтры
+                this.filters = {
+                    categories: selectedValues,
+                    minPrice: minPrice || null,
+                    maxPrice: maxPrice || null,
+                    inStock: inStock || false
+                };
+
+                console.log('Выбранные категории:', selectedValues);
+                console.log('Мин. цена:', minPrice);
+                console.log('Макс. цена:', maxPrice);
+                console.log('Только в наличии:', inStock);
                 console.log('Текущие фильтры:', this.filters);
 
                 this.sendFiltersToServer();
             }
-
             async sendFiltersToServer() {
                 console.log('Отправка на сервер:', this.filters);
 
                 try {
                     const params = new URLSearchParams();
 
-                    if (this.filters.categories && this.filters.categories.length > 0) {
+                    // Добавляем категории
+                    if (this.filters.categories?.length > 0) {
                         params.append('categories', this.filters.categories.join(','));
+                    }
+
+                    // Добавляем минимальную цену
+                    if (this.filters.minPrice) {
+                        params.append('minPrice', this.filters.minPrice);
+                    }
+
+                    // Добавляем максимальную цену
+                    if (this.filters.maxPrice) {
+                        params.append('maxPrice', this.filters.maxPrice);
+                    }
+
+                    // Добавляем фильтр наличия
+                    if (this.filters.inStock) {
+                        params.append('inStock', 'true');
                     }
 
                     const url = `${this.apiUrl}/products/filter?${params.toString()}`;
@@ -509,21 +576,19 @@
 
                     const products = await response.json();
                     console.log('Получены отфильтрованные товары:', products);
-                    console.log('Количество товаров:', products.length);
 
                     if (window.shopManager) {
-                        console.log('Вызываем shopManager.renderProducts');
-                        shopManager.renderProducts(products);
-                    } else {
-                        console.error('shopManager не найден!');
+                        window.shopManager.renderProducts(products);
+                        window.shopManager.showNotification(`Найдено товаров: ${products.length}`);
                     }
 
-                    this.showCustomNotification(`Найдено товаров: ${products.length}`);
                     this.hideFilters();
 
                 } catch (error) {
                     console.error('Ошибка при фильтрации:', error);
-                    this.showCustomNotification('Ошибка при фильтрации', 'error');
+                    if (window.shopManager) {
+                        window.shopManager.showNotification('Ошибка при фильтрации', 'error');
+                    }
                 }
             }
 
@@ -613,7 +678,15 @@
                         ? `<span class="stock available">✓ В наличии: ${stockQuantity} шт.</span>`
                         : '<span class="stock">✗ Нет в наличии</span>';
 
+                    // ✅ ДОБАВЛЯЕМ КАРТИНКУ
+                    const imageUrl = product.image_url
+                        ? product.image_url
+                        : '/static/default.png'; // если нет картинки, используем дефолтную
+
                     card.innerHTML = `
+                        <div class="product-image">
+                            <img src="${imageUrl}" alt="${product.name || 'Товар'}" loading="lazy">
+                        </div>
                         <h3>${product.name || 'Без названия'}</h3>
                         <div class="product-description">${product.description || 'Нет описания'}</div>
                         <div class="price">${(product.price || 0).toLocaleString()} ₽</div>
