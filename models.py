@@ -212,6 +212,38 @@ class Database:
                 'items': items,
                 'total': total
             }
+    def remove_from_cart(self, user_id, product_id):
+        """Удалить товар из корзины и вернуть количество на склад"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Получаем количество перед удалением
+            cursor.execute('''
+                SELECT quantity FROM cart 
+                WHERE user_id = ? AND product_id = ?
+            ''', (user_id, product_id))
+            row = cursor.fetchone()
+            
+            if not row:
+                return {'success': False, 'error': 'Товар не найден в корзине'}
+            
+            quantity = row[0]
+            
+            # Удаляем из корзины
+            cursor.execute('''
+                DELETE FROM cart 
+                WHERE user_id = ? AND product_id = ?
+            ''', (user_id, product_id))
+            
+            # Возвращаем товар на склад
+            cursor.execute('''
+                UPDATE products 
+                SET stock_quantity = stock_quantity + ? 
+                WHERE id = ?
+            ''', (quantity, product_id))
+            
+            conn.commit()
+            return {'success': True}
 
     def clear_cart(self, user_id):
         """Очистить корзину"""
